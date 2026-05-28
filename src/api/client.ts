@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
 export const apiClient = axios.create({
@@ -15,13 +15,19 @@ apiClient.interceptors.request.use(config => {
 
 apiClient.interceptors.response.use(
   res => res,
-  err => {
-    if (err.response?.status === 401) {
+  (err: AxiosError<{ error?: string; message?: string }>) => {
+    // Auto-logout on 401 — but only after we have a token, so the initial
+    // /auth/me bootstrap doesn't bounce unauthenticated visitors.
+    if (err.response?.status === 401 && useAuthStore.getState().token) {
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
-    return Promise.reject(err)
-  }
+    // Surface the server's error message
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message
+    return Promise.reject(new Error(msg))
+  },
 )
 
 export default apiClient

@@ -1,24 +1,25 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Filter, Bookmark, BookmarkCheck, Clock, Star, ExternalLink, Play } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Search, Bookmark, BookmarkCheck, Clock, Star, ExternalLink, Play } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge, Progress } from '@/components/ui/primitives'
-import { mockRecommendations } from '@/mock/data'
+import { Progress } from '@/components/ui/primitives'
 import { cn, capitalize } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
-import type { LearningMaterial, AssessmentDomain, ContentFormat } from '@/types'
+import { recommendationsApi, queryKeys } from '@/api'
+import type { LearningMaterial, ContentFormat } from '@/types'
 
 const formatIcons: Record<ContentFormat, string> = {
-  video: '🎬', worksheet: '📄', interactive: '⚡', article: '📰', practice: '🎯', quiz: '🧩'
+  video: '🎬', worksheet: '📄', interactive: '⚡', article: '📰', practice: '🎯', quiz: '🧩',
 }
 
 const domainColors: Record<string, string> = {
   mathematics: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-  grammar: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
-  reading: 'bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-400',
-  memory: 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400',
-  reasoning: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400',
+  grammar:     'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
+  reading:     'bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-400',
+  memory:      'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400',
+  reasoning:   'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400',
 }
 
 function MaterialCard({ material, onBookmark }: { material: LearningMaterial; onBookmark: (id: string) => void }) {
@@ -31,15 +32,14 @@ function MaterialCard({ material, onBookmark }: { material: LearningMaterial; on
             <img src={material.thumbnailUrl} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
             <span className="absolute bottom-2 left-2 text-2xl">{formatIcons[material.format]}</span>
-            <span className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
-              {material.format}
-            </span>
+            <span className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">{material.format}</span>
           </div>
         )}
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="font-semibold text-sm leading-tight">{material.title}</h3>
-            <button onClick={() => onBookmark(material.id)} className={cn('shrink-0 transition-colors', material.isBookmarked ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500')}>
+            <button onClick={() => onBookmark(material.id)}
+              className={cn('shrink-0 transition-colors', material.isBookmarked ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500')}>
               {material.isBookmarked ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
             </button>
           </div>
@@ -48,12 +48,12 @@ function MaterialCard({ material, onBookmark }: { material: LearningMaterial; on
             <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', domainColors[material.domain] || 'bg-muted text-muted-foreground')}>
               {material.domain}
             </span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />{material.estimatedDuration}m
-            </span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{material.rating}
-            </span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{material.estimatedDuration}m</span>
+            {material.rating && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />{material.rating}
+              </span>
+            )}
           </div>
           {material.progressPercent > 0 && (
             <div className="mb-3">
@@ -69,7 +69,11 @@ function MaterialCard({ material, onBookmark }: { material: LearningMaterial; on
             </div>
             <span className="text-xs text-muted-foreground">{score}% match</span>
           </div>
-          <Button size="sm" variant={material.progressPercent > 0 ? 'outline' : 'default'} className="w-full mt-3">
+          <Button size="sm" variant={material.progressPercent > 0 ? 'outline' : 'default'} className="w-full mt-3"
+            onClick={() => {
+              if (material.url && material.url !== '#') window.open(material.url, '_blank', 'noopener,noreferrer')
+              else toast.info('Coming soon', 'External link not configured for this item.')
+            }}>
             {material.progressPercent > 0 ? <><Play className="h-3 w-3" />Continue</> : <><ExternalLink className="h-3 w-3" />Start Learning</>}
           </Button>
         </CardContent>
@@ -79,14 +83,30 @@ function MaterialCard({ material, onBookmark }: { material: LearningMaterial; on
 }
 
 export default function RecommendationsPage() {
-  const [materials, setMaterials] = useState(mockRecommendations)
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [domainFilter, setDomainFilter] = useState<string>('all')
   const [formatFilter, setFormatFilter] = useState<string>('all')
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false)
 
-  const domains = ['all', 'reading', 'reasoning', 'memory', 'mathematics', 'grammar']
-  const formats = ['all', 'video', 'interactive', 'worksheet', 'article', 'practice']
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.recommendations,
+    queryFn: recommendationsApi.list,
+  })
+
+  const bookmark = useMutation({
+    mutationFn: (id: string) => recommendationsApi.toggleBookmark(id),
+    onSuccess: (res, id) => {
+      qc.invalidateQueries({ queryKey: queryKeys.recommendations })
+      qc.invalidateQueries({ queryKey: ['library'] })
+      toast.success(res.bookmarked ? 'Bookmarked!' : 'Removed bookmark')
+    },
+    onError: (e: Error) => toast.error('Action failed', e.message),
+  })
+
+  const materials = data?.materials || []
+  const domains   = ['all', 'reading', 'reasoning', 'memory', 'mathematics', 'grammar']
+  const formats   = ['all', 'video', 'interactive', 'worksheet', 'article', 'practice']
 
   const filtered = materials.filter(m => {
     if (search && !m.title.toLowerCase().includes(search.toLowerCase())) return false
@@ -96,12 +116,6 @@ export default function RecommendationsPage() {
     return true
   })
 
-  const handleBookmark = (id: string) => {
-    setMaterials(prev => prev.map(m => m.id === id ? { ...m, isBookmarked: !m.isBookmarked } : m))
-    const m = materials.find(x => x.id === id)
-    if (m) toast.success(m.isBookmarked ? 'Removed bookmark' : 'Bookmarked!', m.title)
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -109,7 +123,6 @@ export default function RecommendationsPage() {
         <p className="text-muted-foreground">Personalized learning materials based on your assessment results.</p>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-48">
@@ -142,14 +155,28 @@ export default function RecommendationsPage() {
 
       <p className="text-sm text-muted-foreground">{filtered.length} material{filtered.length !== 1 ? 's' : ''} found</p>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map(m => <MaterialCard key={m.id} material={m} onBookmark={handleBookmark} />)}
-      </div>
+      {isLoading && (
+        <div className="text-center py-16">
+          <div className="h-8 w-8 rounded-full border-4 border-brand-500 border-t-transparent animate-spin mx-auto" />
+        </div>
+      )}
 
-      {filtered.length === 0 && (
+      {!isLoading && materials.length === 0 && (
         <div className="text-center py-16">
           <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="font-medium">No materials found</p>
+          <p className="font-medium">No recommendations yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Take an assessment to receive personalised recommendations.</p>
+        </div>
+      )}
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filtered.map(m => <MaterialCard key={m.id} material={m} onBookmark={id => bookmark.mutate(id)} />)}
+      </div>
+
+      {!isLoading && materials.length > 0 && filtered.length === 0 && (
+        <div className="text-center py-16">
+          <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="font-medium">No materials match your filters</p>
           <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
         </div>
       )}

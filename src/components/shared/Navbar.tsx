@@ -3,13 +3,20 @@ import { Bell, Sun, Moon, Menu, Search } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { Avatar } from '@/components/ui/primitives'
-import { mockNotifications } from '@/mock/data'
+import { useQuery } from '@tanstack/react-query'
+import { notificationsApi, queryKeys } from '@/api'
 import { motion } from 'framer-motion'
 
 export function Navbar() {
   const { user } = useAuthStore()
   const { theme, setTheme, setSidebarOpen, sidebarOpen } = useUIStore()
-  const unreadCount = mockNotifications.filter(n => !n.isRead).length
+  const { data: notifications = [] } = useQuery({
+    queryKey: queryKeys.notifications,
+    queryFn: notificationsApi.list,
+    enabled: !!user,
+    refetchInterval: 60_000,
+  })
+  const unreadCount = notifications.filter(n => !n.isRead).length
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
 

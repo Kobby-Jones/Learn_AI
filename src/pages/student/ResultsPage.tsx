@@ -1,70 +1,98 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import {
-  Brain, TrendingUp, AlertCircle, CheckCircle, ArrowRight,
-  Clock, Target, BarChart3, Download, Share2, Star
+  Brain, AlertCircle, CheckCircle, ArrowRight,
+  Clock, Target, BarChart3, Download, Share2, Star,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge, Progress } from '@/components/ui/primitives'
-import { mockAssessmentResult } from '@/mock/data'
-import { getDifficultyColor, getDomainColor, formatDuration } from '@/lib/utils'
+import { getDomainColor, formatDuration } from '@/lib/utils'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from 'recharts'
 import { toast } from '@/components/ui/toast'
+import { resultsApi, queryKeys } from '@/api'
 
 const difficultyLabels: Record<string, string> = {
-  dyslexia_related: 'Dyslexia-Related',
-  dyscalculia_related: 'Dyscalculia-Related',
-  reading_comprehension: 'Reading Comprehension Difficulty',
-  memory_related: 'Memory-Related Difficulty',
-  reasoning_related: 'Reasoning-Related Difficulty',
-  no_significant_difficulty: 'No Significant Difficulty Detected',
+  dyslexia_related:           'Dyslexia-Related',
+  dyscalculia_related:        'Dyscalculia-Related',
+  reading_comprehension:      'Reading Comprehension Difficulty',
+  memory_related:             'Memory-Related Difficulty',
+  reasoning_related:          'Reasoning-Related Difficulty',
+  no_significant_difficulty:  'No Significant Difficulty Detected',
 }
 
 const riskColors: Record<string, string> = {
-  low: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400',
+  low:      'text-emerald-600 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400',
   moderate: 'text-amber-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-400',
-  high: 'text-rose-600 bg-rose-50 dark:bg-rose-950 dark:text-rose-400',
+  high:     'text-rose-600 bg-rose-50 dark:bg-rose-950 dark:text-rose-400',
 }
 
 export default function ResultsPage() {
-  const result = mockAssessmentResult
+  const { data: result, isLoading, isError } = useQuery({
+    queryKey: queryKeys.resultLatest,
+    queryFn: resultsApi.latest,
+    retry: false,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-20">
+        <div className="h-10 w-10 rounded-full border-4 border-brand-500 border-t-transparent animate-spin mx-auto" />
+        <p className="text-muted-foreground mt-4 text-sm">Loading your results…</p>
+      </div>
+    )
+  }
+
+  if (isError || !result) {
+    return (
+      <div className="max-w-md mx-auto text-center py-20">
+        <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <h2 className="font-display text-2xl font-bold mb-2">No results yet</h2>
+        <p className="text-muted-foreground mb-6">Take your first assessment to see your cognitive profile and personalised recommendations.</p>
+        <Link to="/student/assessment">
+          <Button variant="gradient">Start Assessment <ArrowRight className="h-4 w-4" /></Button>
+        </Link>
+      </div>
+    )
+  }
+
   const { classification } = result
 
   const radarData = classification.domainScores.map(d => ({
     domain: d.domain.charAt(0).toUpperCase() + d.domain.slice(1),
-    score: d.accuracy,
+    score:  d.accuracy,
     fullMark: 100,
   }))
 
   const barData = classification.domainScores.map(d => ({
-    domain: d.domain.charAt(0).toUpperCase() + d.domain.slice(1),
-    score: d.accuracy,
+    domain:  d.domain.charAt(0).toUpperCase() + d.domain.slice(1),
+    score:   d.accuracy,
     avgTime: Math.round(d.avgResponseTime / 1000),
   }))
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold mb-1">Assessment Report</h1>
-          <p className="text-muted-foreground text-sm">Completed {new Date(result.completedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <p className="text-muted-foreground text-sm">
+            Completed {new Date(result.completedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => toast.info('Export feature', 'PDF export coming soon')}>
             <Download className="h-4 w-4" /> Export
           </Button>
-          <Button variant="outline" size="sm" onClick={() => toast.info('Share feature', 'Sharing with teacher...')}>
+          <Button variant="outline" size="sm" onClick={() => toast.info('Share feature', 'Sharing with teacher…')}>
             <Share2 className="h-4 w-4" /> Share
           </Button>
         </div>
       </motion.div>
 
-      {/* Classification Banner */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card className="overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-brand-500 to-teal-500" />
@@ -76,7 +104,7 @@ export default function ResultsPage() {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-3 mb-2">
                   <h2 className="font-display text-xl font-bold">
-                    {difficultyLabels[classification.primaryDifficulty]}
+                    {difficultyLabels[classification.primaryDifficulty] || classification.primaryDifficulty}
                   </h2>
                   <span className={`text-xs px-3 py-1 rounded-full font-semibold capitalize ${riskColors[classification.riskLevel]}`}>
                     {classification.riskLevel} risk
@@ -94,7 +122,6 @@ export default function ResultsPage() {
         </Card>
       </motion.div>
 
-      {/* Charts */}
       <div className="grid lg:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card>
@@ -133,7 +160,6 @@ export default function ResultsPage() {
         </motion.div>
       </div>
 
-      {/* Domain breakdown */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card>
           <CardHeader><CardTitle>Domain Breakdown</CardTitle></CardHeader>
@@ -147,7 +173,7 @@ export default function ResultsPage() {
                       {classification.strengths.includes(d.domain) && <Badge variant="success" className="text-[10px]">Strength</Badge>}
                       {classification.weaknesses.includes(d.domain) && <Badge variant="warning" className="text-[10px]">Focus area</Badge>}
                     </div>
-                    <Progress value={d.accuracy} className="h-2" style={{ '--tw-bg-opacity': '1' } as React.CSSProperties} />
+                    <Progress value={d.accuracy} className="h-2" />
                   </div>
                   <span className="text-sm font-semibold w-12 text-right">{d.accuracy}%</span>
                   <span className="text-xs text-muted-foreground w-16 text-right">{d.correct}/{d.total} correct</span>
@@ -159,7 +185,6 @@ export default function ResultsPage() {
         </Card>
       </motion.div>
 
-      {/* Detailed analysis */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5 text-violet-500" /> Detailed Analysis</CardTitle></CardHeader>
@@ -170,6 +195,7 @@ export default function ResultsPage() {
                 <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2 flex items-center gap-1">
                   <CheckCircle className="h-4 w-4" /> Strengths
                 </p>
+                {classification.strengths.length === 0 && <p className="text-xs italic text-emerald-700 dark:text-emerald-400">None identified yet — keep practising!</p>}
                 {classification.strengths.map(s => (
                   <div key={s} className="text-sm text-emerald-700 dark:text-emerald-400 capitalize flex items-center gap-1.5 mt-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {s}
@@ -180,6 +206,7 @@ export default function ResultsPage() {
                 <p className="text-sm font-semibold text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1">
                   <AlertCircle className="h-4 w-4" /> Recommended Focus Areas
                 </p>
+                {classification.weaknesses.length === 0 && <p className="text-xs italic text-amber-700 dark:text-amber-400">No critical focus areas detected.</p>}
                 {classification.weaknesses.map(w => (
                   <div key={w} className="text-sm text-amber-700 dark:text-amber-400 capitalize flex items-center gap-1.5 mt-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {w}
@@ -187,11 +214,19 @@ export default function ResultsPage() {
                 ))}
               </div>
             </div>
+
+            {classification.recommendations.length > 0 && (
+              <div className="mt-5 rounded-xl border border-brand-100 dark:border-brand-900 bg-brand-50/40 dark:bg-brand-950/20 p-4">
+                <p className="text-sm font-semibold text-brand-700 dark:text-brand-300 mb-2">Suggested Next Steps</p>
+                <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
+                  {classification.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* CTA */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
         <Card className="bg-gradient-to-r from-brand-50 to-teal-50 dark:from-brand-950/30 dark:to-teal-950/30 border-brand-100 dark:border-brand-800">
           <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

@@ -11,11 +11,12 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const { login, isLoading, error } = useAuthStore()
+  const { login, isLoading, error, clearError } = useAuthStore()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    clearError()
     await login({ email, password })
     const user = useAuthStore.getState().user
     if (user) {

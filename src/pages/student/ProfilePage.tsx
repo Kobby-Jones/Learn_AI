@@ -9,16 +9,39 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
+import { authApi } from '@/api/auth'
 
 export default function ProfilePage() {
-  const { user } = useAuthStore()
+  const { user, updateUser } = useAuthStore()
   const { theme, setTheme, dyslexiaMode, toggleDyslexia, highContrast, toggleHighContrast, fontSize, setFontSize, reducedMotion, toggleReducedMotion } = useUIStore()
   const [name, setName] = useState(user?.name || '')
-  const [email, setEmail] = useState(user?.email || '')
+  const email = user?.email || ''
+  const [saving, setSaving] = useState(false)
 
   if (!user) return null
 
-  const handleSave = () => toast.success('Profile updated', 'Your changes have been saved.')
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const updated = await authApi.updateProfile({
+        name,
+        preferences: {
+          theme,
+          dyslexiaMode,
+          highContrast,
+          reducedMotion,
+          fontSize,
+        },
+      })
+      updateUser(updated)
+      toast.success('Profile updated', 'Your changes have been saved.')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not save'
+      toast.error('Save failed', msg)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -46,9 +69,10 @@ export default function ProfilePage() {
             </div>
             <div>
               <Label htmlFor="email">Email address</Label>
-              <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5" />
+              <Input id="email" type="email" value={email} disabled className="mt-1.5 opacity-60" />
+              <p className="text-xs text-muted-foreground mt-1">Email cannot be changed. Contact your administrator if needed.</p>
             </div>
-            <Button onClick={handleSave} variant="gradient"><Save className="h-4 w-4" /> Save Changes</Button>
+            <Button onClick={handleSave} variant="gradient" loading={saving}><Save className="h-4 w-4" /> Save Changes</Button>
           </CardContent>
         </Card>
       </motion.div>

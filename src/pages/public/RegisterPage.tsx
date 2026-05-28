@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Brain, Eye, EyeOff, GraduationCap, BookOpen, Shield, ArrowRight } from 'lucide-react'
+import { Brain, Eye, EyeOff, GraduationCap, BookOpen, Shield, ArrowRight, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/primitives'
 import { useAuthStore } from '@/store/authStore'
@@ -10,9 +10,9 @@ import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
 
 const roles = [
-  { value: 'student' as UserRole, label: 'Student', icon: <GraduationCap className="h-5 w-5" />, desc: 'Take assessments and track progress' },
-  { value: 'teacher' as UserRole, label: 'Teacher', icon: <BookOpen className="h-5 w-5" />, desc: 'Monitor and support your students' },
-  { value: 'admin' as UserRole, label: 'Administrator', icon: <Shield className="h-5 w-5" />, desc: 'Manage platform and analytics' },
+  { value: 'student' as UserRole, label: 'Student',       icon: <GraduationCap className="h-5 w-5" />, desc: 'Take assessments and track progress' },
+  { value: 'teacher' as UserRole, label: 'Teacher',       icon: <BookOpen className="h-5 w-5" />,      desc: 'Monitor and support your students'   },
+  { value: 'admin'   as UserRole, label: 'Administrator', icon: <Shield className="h-5 w-5" />,        desc: 'Manage platform and analytics'       },
 ]
 
 export default function RegisterPage() {
@@ -20,13 +20,15 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('student')
+  const [teacherCode, setTeacherCode] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const { register, isLoading } = useAuthStore()
+  const { register, isLoading, error, clearError } = useAuthStore()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await register({ name, email, password, role })
+    clearError()
+    await register({ name, email, password, role, teacherCode: role === 'teacher' ? teacherCode : undefined })
     const user = useAuthStore.getState().user
     if (user) {
       toast.success('Account created!', 'Welcome to LearnAI')
@@ -49,8 +51,13 @@ export default function RegisterPage() {
             <h1 className="font-display text-2xl font-bold mb-1">Create your account</h1>
             <p className="text-muted-foreground text-sm mb-6">Join LearnAI and get started today</p>
 
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-sm">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Role selector */}
               <div>
                 <Label className="mb-2 block">I am a...</Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -60,7 +67,7 @@ export default function RegisterPage() {
                         'flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-all text-sm',
                         role === r.value
                           ? 'border-brand-500 bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300'
-                          : 'border-border hover:border-brand-300 text-muted-foreground'
+                          : 'border-border hover:border-brand-300 text-muted-foreground',
                       )}>
                       {r.icon}
                       <span className="font-medium">{r.label}</span>
@@ -85,13 +92,24 @@ export default function RegisterPage() {
                 <Label htmlFor="password">Password</Label>
                 <div className="relative mt-1.5">
                   <Input id="password" type={showPass ? 'text' : 'password'} value={password}
-                    onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters" required minLength={6} />
+                    onChange={e => setPassword(e.target.value)} placeholder="Min. 6 characters" required minLength={6} />
                   <button type="button" onClick={() => setShowPass(!showPass)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
+
+              {role === 'teacher' && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                  <Label htmlFor="teacherCode" className="flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5" /> Teacher registration code
+                  </Label>
+                  <Input id="teacherCode" value={teacherCode} onChange={e => setTeacherCode(e.target.value)}
+                    placeholder="Provided by your administrator" className="mt-1.5" required />
+                  <p className="text-xs text-muted-foreground mt-1">Default for this demo: <code className="text-foreground">TEACHER2024</code></p>
+                </motion.div>
+              )}
 
               <Button type="submit" className="w-full" size="lg" loading={isLoading} variant="gradient">
                 Create Account <ArrowRight className="h-4 w-4" />

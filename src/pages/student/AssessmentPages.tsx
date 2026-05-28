@@ -1,34 +1,38 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Brain, Clock, ChevronRight, ChevronLeft, SkipForward,
-  Pause, CheckCircle, BookOpen, Zap, Target, BarChart3, Star
+  Pause, CheckCircle, AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress, Badge } from '@/components/ui/primitives'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAssessmentStore } from '@/store/assessmentStore'
-import { formatDuration, getDomainColor, cn } from '@/lib/utils'
+import { formatDuration, cn } from '@/lib/utils'
+import { queryKeys } from '@/api'
+import { toast } from '@/components/ui/toast'
 import type { AssessmentDomain } from '@/types'
 
 // ─── Start Assessment Page ───────────────────────────────────────────────────
 export function StartAssessmentPage() {
   const navigate = useNavigate()
-  const { startSession } = useAssessmentStore()
+  const { startSession, isStarting, error } = useAssessmentStore()
 
   const domains = [
-    { name: 'mathematics' as AssessmentDomain, icon: '∑', color: '#f59e0b', desc: '15 questions on arithmetic, numeracy, and problem solving' },
-    { name: 'grammar' as AssessmentDomain, icon: 'Aa', color: '#8b5cf6', desc: '15 questions on sentence structure and language mechanics' },
-    { name: 'reading' as AssessmentDomain, icon: '📖', color: '#3b82f6', desc: '15 questions on comprehension passages and inference' },
-    { name: 'memory' as AssessmentDomain, icon: '🧠', color: '#14b8a6', desc: '15 tasks on short-term and working memory' },
-    { name: 'reasoning' as AssessmentDomain, icon: '⚡', color: '#f43f5e', desc: '15 questions on logic, patterns, and abstract thinking' },
+    { name: 'mathematics' as AssessmentDomain, icon: '∑',  color: '#f59e0b', desc: 'Questions on arithmetic, numeracy, and problem solving' },
+    { name: 'grammar'     as AssessmentDomain, icon: 'Aa', color: '#8b5cf6', desc: 'Questions on sentence structure and language mechanics' },
+    { name: 'reading'     as AssessmentDomain, icon: '📖', color: '#3b82f6', desc: 'Questions on comprehension passages and inference' },
+    { name: 'memory'      as AssessmentDomain, icon: '🧠', color: '#14b8a6', desc: 'Tasks on short-term and working memory' },
+    { name: 'reasoning'   as AssessmentDomain, icon: '⚡', color: '#f43f5e', desc: 'Questions on logic, patterns, and abstract thinking' },
   ]
 
-  const handleStart = () => {
-    const id = 'session_' + Date.now()
-    startSession(id)
-    navigate('/student/assessment/live')
+  const handleStart = async () => {
+    await startSession()
+    const ok = !!useAssessmentStore.getState().session
+    if (ok) navigate('/student/assessment/live')
+    else toast.error('Could not start', useAssessmentStore.getState().error || 'Please try again')
   }
 
   return (
@@ -41,6 +45,12 @@ export function StartAssessmentPage() {
           <h1 className="font-display text-3xl font-bold mb-2">Cognitive Assessment</h1>
           <p className="text-muted-foreground">Complete assessment across 5 domains. Takes approximately 30–45 minutes.</p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-sm flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )}
 
         <Card className="mb-6">
           <CardContent className="p-6">
@@ -71,9 +81,10 @@ export function StartAssessmentPage() {
           </CardContent>
         </Card>
 
-        <Button onClick={handleStart} variant="gradient" size="xl" className="w-full group">
-          Begin Assessment
-          <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+        <Button onClick={handleStart} variant="gradient" size="xl" className="w-full group" loading={isStarting}>
+          {isStarting ? 'Preparing your assessment…' : (
+            <>Begin Assessment <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" /></>
+          )}
         </Button>
       </motion.div>
     </div>
@@ -83,7 +94,12 @@ export function StartAssessmentPage() {
 // ─── Live Assessment Interface ───────────────────────────────────────────────
 export function LiveAssessmentPage() {
   const navigate = useNavigate()
-  const { session, answerQuestion, nextQuestion, previousQuestion, skipQuestion, pauseSession, resumeSession, submitSession, resetSession, isAnalysing } = useAssessmentStore()
+  const queryClient = useQueryClient()
+  const {
+    session, answerQuestion, nextQuestion, previousQuestion, skipQuestion,
+    pauseSession, resumeSession, submitSession, isAnalysing, error,
+  } = useAssessmentStore()
+
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(0)
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now())
@@ -102,14 +118,16 @@ export function LiveAssessmentPage() {
     setSelectedAnswer(existingAnswer?.answer || null)
     setTimeLeft(question.timeLimit)
     setQuestionStartTime(Date.now())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question?.id])
 
   // Countdown
   useEffect(() => {
     if (!question || session?.isPaused) return
     if (timeLeft <= 0) { handleNext(); return }
-    const t = setTimeout(() => setTimeLeft(t => t - 1), 1000)
+    const t = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, session?.isPaused])
 
   const handleAnswer = (answer: string) => {
@@ -129,16 +147,32 @@ export function LiveAssessmentPage() {
       setSelectedAnswer(null)
       nextQuestion()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question, session, selectedAnswer, currentIndex, totalQuestions])
 
   const handleSubmit = async () => {
-    submitSession()
-    setTimeout(() => {
+    setConfirmed(false)
+    const resultId = await submitSession()
+    if (resultId) {
+      // Invalidate caches so the results page loads fresh data
+      queryClient.invalidateQueries({ queryKey: ['result'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.recommendations })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userStats })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userProgress })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
       navigate('/student/results')
-    }, 3500)
+    } else {
+      toast.error('Submission failed', useAssessmentStore.getState().error || 'Please try again')
+    }
   }
 
-  if (!session) return <div className="text-center p-12"><p>No active session. <button onClick={() => navigate('/student/assessment')} className="text-brand-600 underline">Start assessment</button></p></div>
+  if (!session) {
+    return (
+      <div className="text-center p-12">
+        <p>No active session. <button onClick={() => navigate('/student/assessment')} className="text-brand-600 underline">Start assessment</button></p>
+      </div>
+    )
+  }
 
   if (isAnalysing) {
     return (
@@ -172,6 +206,7 @@ export function LiveAssessmentPage() {
           <h2 className="font-display text-2xl font-bold mb-2">Submit Assessment?</h2>
           <p className="text-muted-foreground text-sm mb-2">You have answered {answeredCount} of {totalQuestions} questions.</p>
           <p className="text-muted-foreground text-sm mb-6">Once submitted, your answers cannot be changed.</p>
+          {error && <p className="text-rose-600 text-sm mb-3">{error}</p>}
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setConfirmed(false)}>Review Answers</Button>
             <Button variant="gradient" className="flex-1" onClick={handleSubmit}>Submit Now</Button>
@@ -183,7 +218,6 @@ export function LiveAssessmentPage() {
 
   if (!question) return null
 
-  const domainProgress = session.domainProgress
   const timerDanger = timeLeft <= 10
   const timerPct = (timeLeft / question.timeLimit) * 100
 
@@ -206,16 +240,13 @@ export function LiveAssessmentPage() {
         </div>
       </div>
 
-      {/* Overall progress */}
       <Progress value={(answeredCount / totalQuestions) * 100} className="h-1.5 mb-6" />
 
-      {/* Timer bar */}
       <div className="h-1 rounded-full bg-muted overflow-hidden mb-6">
         <motion.div className={cn('h-full rounded-full transition-colors', timerDanger ? 'bg-rose-500' : 'bg-brand-500')}
           initial={{ width: '100%' }} animate={{ width: `${timerPct}%` }} transition={{ duration: 1, ease: 'linear' }} />
       </div>
 
-      {/* Question card */}
       <AnimatePresence mode="wait">
         <motion.div key={question.id} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.25 }}>
           <Card className="mb-6">
@@ -236,7 +267,7 @@ export function LiveAssessmentPage() {
                         'flex items-center gap-4 p-4 rounded-xl border text-left transition-all',
                         isSelected
                           ? 'border-brand-500 bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300 font-medium'
-                          : 'border-border hover:border-brand-300 hover:bg-accent'
+                          : 'border-border hover:border-brand-300 hover:bg-accent',
                       )}>
                       <span className={cn('h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0',
                         isSelected ? 'bg-brand-500 text-white' : 'bg-muted text-muted-foreground')}>
@@ -253,7 +284,6 @@ export function LiveAssessmentPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation */}
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => { previousQuestion(); setSelectedAnswer(null) }} disabled={currentIndex === 0}>
           <ChevronLeft className="h-4 w-4" /> Previous
@@ -267,7 +297,6 @@ export function LiveAssessmentPage() {
         </Button>
       </div>
 
-      {/* Pause modal */}
       <AnimatePresence>
         {showPauseModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
