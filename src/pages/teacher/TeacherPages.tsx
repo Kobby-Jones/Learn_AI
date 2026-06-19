@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Users, Search, FileText, BarChart3, Download, BookOpen, TrendingUp,
+  Users, Search, FileText, BarChart3, Download, BookOpen, TrendingUp, GraduationCap, Save,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, Badge, Progress } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/primitives'
 import { formatRelative, getDifficultyColor, cn } from '@/lib/utils'
+import { gradeLabel, GRADES } from '@/lib/grades'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { Label, Switch } from '@/components/ui/primitives'
@@ -25,12 +26,20 @@ export function StudentsPage() {
     queryKey: queryKeys.teacherStudents,
     queryFn: teacherApi.listStudents,
   })
+  const { data: classInfo } = useQuery({
+    queryKey: queryKeys.teacherClasses,
+    queryFn: teacherApi.getClasses,
+  })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'low' | 'moderate' | 'high'>('all')
+  const [classFilter, setClassFilter] = useState<string>('all')
+
+  const myClasses = classInfo?.classes ?? []
 
   const filtered = students.filter(s => {
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false
     if (filter !== 'all' && s.riskLevel !== filter) return false
+    if (classFilter !== 'all' && s.grade !== classFilter) return false
     return true
   })
 
@@ -41,6 +50,19 @@ export function StudentsPage() {
           <Users className="h-7 w-7 text-brand-500" /> My Students
         </h1>
         <p className="text-muted-foreground">View and manage your students' progress.</p>
+        {myClasses.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <span className="text-xs text-muted-foreground">Your classes:</span>
+            {myClasses.map(c => (
+              <Badge key={c.value} variant="secondary" className="text-xs">{c.label}</Badge>
+            ))}
+          </div>
+        )}
+        {classInfo && !classInfo.isAdmin && myClasses.length === 0 && (
+          <p className="text-sm text-amber-600 mt-2">
+            You have no classes assigned yet, so no students appear. Add your classes from your Profile page.
+          </p>
+        )}
       </div>
 
       <Card>
@@ -49,6 +71,13 @@ export function StudentsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search students..." className="pl-9" />
           </div>
+          {myClasses.length > 1 && (
+            <select value={classFilter} onChange={e => setClassFilter(e.target.value)}
+              className="h-9 rounded-full border border-border bg-background px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="all">All classes</option>
+              {myClasses.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          )}
           {(['all', 'low', 'moderate', 'high'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={cn('px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-all',
@@ -68,6 +97,7 @@ export function StudentsPage() {
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3 font-medium">Student</th>
+                  <th className="px-4 py-3 font-medium">Class</th>
                   <th className="px-4 py-3 font-medium">Last Activity</th>
                   <th className="px-4 py-3 font-medium">Assessments</th>
                   <th className="px-4 py-3 font-medium">Avg Score</th>
@@ -83,6 +113,9 @@ export function StudentsPage() {
                         <Avatar name={s.name} size="sm" />
                         <div><p className="font-medium">{s.name}</p><p className="text-xs text-muted-foreground">{s.email}</p></div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="text-xs">{s.gradeLabel || gradeLabel(s.grade) || '—'}</Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatRelative(s.lastActivity)}</td>
                     <td className="px-4 py-3">{s.totalAssessments}</td>
@@ -100,7 +133,7 @@ export function StudentsPage() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">No students match your filters.</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No students match your filters.</td></tr>
                 )}
               </tbody>
             </table>
@@ -318,6 +351,34 @@ export function ClassroomPage() {
 export function TeacherProfilePage() {
   const { user } = useAuthStore()
   const { theme, setTheme } = useUIStore()
+  const qc = useQueryClient()
+  const { data: classInfo } = useQuery({
+    queryKey: queryKeys.teacherClasses,
+    queryFn: teacherApi.getClasses,
+  })
+  const [selected, setSelected] = useState<string[] | null>(null)
+
+  // Initialise the local selection from the server the first time it loads.
+  const serverClasses = (classInfo?.classes ?? []).map(c => c.value)
+  const current = selected ?? serverClasses
+  const toggle = (value: string) =>
+    setSelected(prev => {
+      const base = prev ?? serverClasses
+      return base.includes(value) ? base.filter(c => c !== value) : [...base, value]
+    })
+
+  const save = useMutation({
+    mutationFn: () => teacherApi.setClasses(current),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.teacherClasses })
+      qc.invalidateQueries({ queryKey: queryKeys.teacherStudents })
+      qc.invalidateQueries({ queryKey: queryKeys.teacherClassroom })
+      setSelected(null)
+      toast.success('Classes updated', 'Your student lists now reflect these classes.')
+    },
+    onError: (e: Error) => toast.error('Could not save', e.message),
+  })
+
   if (!user) return null
 
   return (
@@ -339,6 +400,31 @@ export function TeacherProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      {classInfo && !classInfo.isAdmin && (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="h-5 w-5" /> My Classes</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">Select the classes you teach. Your student lists and analytics are scoped to these.</p>
+            <div className="grid grid-cols-3 gap-2">
+              {GRADES.map(g => (
+                <button key={g.value} type="button" onClick={() => toggle(g.value)}
+                  className={cn('py-2 rounded-lg border text-sm font-medium transition-all',
+                    current.includes(g.value)
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300'
+                      : 'border-border hover:border-brand-300 text-muted-foreground')}>
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <Button onClick={() => save.mutate()} variant="gradient" loading={save.isPending} disabled={current.length === 0}>
+              <Save className="h-4 w-4" /> Save Classes
+            </Button>
+            {current.length === 0 && <p className="text-xs text-amber-600">Select at least one class.</p>}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle>Appearance</CardTitle></CardHeader>
         <CardContent>

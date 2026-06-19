@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatRelative, cn } from '@/lib/utils'
+import { GRADES, gradeLabel } from '@/lib/grades'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line,
@@ -176,6 +177,7 @@ export function UsersPage() {
               <tr>
                 <th className="px-4 py-3 font-medium">User</th>
                 <th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Class / Grade</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Joined</th>
                 <th className="px-4 py-3 font-medium">Last Login</th>
@@ -192,6 +194,39 @@ export function UsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3"><Badge variant="outline" className="capitalize">{u.role}</Badge></td>
+                  <td className="px-4 py-3">
+                    {u.role === 'student' ? (
+                      <select
+                        value={u.grade || ''}
+                        onChange={e => updateUser.mutate({ id: u.id, updates: { grade: e.target.value || null } })}
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="">Unassigned</option>
+                        {GRADES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                    ) : u.role === 'teacher' ? (
+                      <div className="flex flex-wrap gap-1 max-w-[220px]">
+                        {GRADES.map(g => {
+                          const on = (u.classes || []).includes(g.value)
+                          return (
+                            <button key={g.value} type="button"
+                              onClick={() => {
+                                const next = on
+                                  ? (u.classes || []).filter(c => c !== g.value)
+                                  : [...(u.classes || []), g.value]
+                                updateUser.mutate({ id: u.id, updates: { classes: next } })
+                              }}
+                              className={cn('px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all',
+                                on ? 'border-brand-500 bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300'
+                                   : 'border-border text-muted-foreground hover:border-brand-300')}>
+                              {g.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><Badge variant={u.isActive ? 'success' : 'destructive'}>{u.isActive ? 'Active' : 'Inactive'}</Badge></td>
                   <td className="px-4 py-3 text-muted-foreground">{u.createdAt ? formatRelative(u.createdAt) : '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{u.lastLogin ? formatRelative(u.lastLogin) : 'Never'}</td>
@@ -209,7 +244,7 @@ export function UsersPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (<tr><td colSpan={6} className="p-8 text-center text-muted-foreground">No users match your filters.</td></tr>)}
+              {filtered.length === 0 && (<tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No users match your filters.</td></tr>)}
             </tbody>
           </table>
         )}

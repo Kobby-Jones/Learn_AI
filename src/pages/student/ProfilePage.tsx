@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
+import { gradeLabel } from '@/lib/grades'
 import { authApi } from '@/api/auth'
 
 export default function ProfilePage() {
@@ -71,6 +72,11 @@ export default function ProfilePage() {
               <Label htmlFor="email">Email address</Label>
               <Input id="email" type="email" value={email} disabled className="mt-1.5 opacity-60" />
               <p className="text-xs text-muted-foreground mt-1">Email cannot be changed. Contact your administrator if needed.</p>
+            </div>
+            <div>
+              <Label htmlFor="class">Class / grade</Label>
+              <Input id="class" value={gradeLabel(user.grade) || 'Not assigned'} disabled className="mt-1.5 opacity-60" />
+              <p className="text-xs text-muted-foreground mt-1">Your class determines which questions you receive. Contact your teacher to change it.</p>
             </div>
             <Button onClick={handleSave} variant="gradient" loading={saving}><Save className="h-4 w-4" /> Save Changes</Button>
           </CardContent>

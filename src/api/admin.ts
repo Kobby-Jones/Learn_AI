@@ -49,7 +49,7 @@ export const adminApi = {
   listUsers: (role?: string) =>
     apiClient.get<User[]>('/admin/users', { params: role ? { role } : {} }).then(r => r.data),
 
-  updateUser: (id: string, updates: { isActive?: boolean; role?: string; name?: string }) =>
+  updateUser: (id: string, updates: { isActive?: boolean; role?: string; name?: string; grade?: string | null; classes?: string[] }) =>
     apiClient.patch<User>(`/admin/users/${id}`, updates).then(r => r.data),
 
   deleteUser: (id: string) =>

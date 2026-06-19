@@ -8,6 +8,10 @@ export interface User {
   email: string
   role: UserRole
   avatar?: string
+  grade?: string | null          // student's grade/class
+  gradeLabel?: string | null
+  classes?: string[]             // teacher's assigned classes (grade codes)
+  classLabels?: string[]
   createdAt: string
   lastLogin?: string
   isActive: boolean
@@ -41,6 +45,8 @@ export interface RegisterPayload {
   password: string
   role: UserRole
   teacherCode?: string
+  grade?: string          // required for students
+  classes?: string[]      // optional for teachers
 }
 
 // ─── Assessment ────────────────────────────────────────────────────────────
@@ -58,6 +64,8 @@ export type QuestionType =
 export interface Question {
   id: string
   domain: AssessmentDomain
+  grade?: string
+  gradeLabel?: string
   type: QuestionType
   text: string
   passage?: string
@@ -221,6 +229,8 @@ export interface StudentSummary {
   name: string
   email: string
   avatar?: string
+  grade?: string | null
+  gradeLabel?: string | null
   lastActivity: string
   totalAssessments: number
   averageScore: number

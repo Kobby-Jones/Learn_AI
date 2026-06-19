@@ -38,4 +38,5 @@ export const queryKeys = {
   teacherAnalytics:   ['teacher', 'analytics'] as const,
   teacherEngagement:  ['teacher', 'engagement'] as const,
   teacherReports:     ['teacher', 'reports'] as const,
+  teacherClasses:     ['teacher', 'classes'] as const,
 }

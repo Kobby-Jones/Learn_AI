@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Progress, Badge } from '@/components/ui/primitives'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAssessmentStore } from '@/store/assessmentStore'
+import { useAuthStore } from '@/store/authStore'
+import { gradeLabel } from '@/lib/grades'
 import { formatDuration, cn } from '@/lib/utils'
 import { queryKeys } from '@/api'
 import { toast } from '@/components/ui/toast'
@@ -19,6 +21,9 @@ import type { AssessmentDomain } from '@/types'
 export function StartAssessmentPage() {
   const navigate = useNavigate()
   const { startSession, isStarting, error } = useAssessmentStore()
+  const user = useAuthStore(s => s.user)
+  const hasGrade = !!user?.grade
+  const classLabel = gradeLabel(user?.grade)
 
   const domains = [
     { name: 'mathematics' as AssessmentDomain, icon: '∑',  color: '#f59e0b', desc: 'Questions on arithmetic, numeracy, and problem solving' },
@@ -45,6 +50,19 @@ export function StartAssessmentPage() {
           <h1 className="font-display text-3xl font-bold mb-2">Cognitive Assessment</h1>
           <p className="text-muted-foreground">Complete assessment across 5 domains. Takes approximately 30–45 minutes.</p>
         </div>
+
+        {hasGrade ? (
+          <div className="mb-6 flex items-center justify-center gap-2 text-sm">
+            <Badge variant="secondary" className="text-sm px-3 py-1">
+              You are taking the {classLabel} assessment
+            </Badge>
+          </div>
+        ) : (
+          <div className="mb-6 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>No class is set on your account yet, so questions cannot be served. Please ask your teacher or administrator to assign your class.</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-sm flex items-center gap-2">
@@ -81,9 +99,9 @@ export function StartAssessmentPage() {
           </CardContent>
         </Card>
 
-        <Button onClick={handleStart} variant="gradient" size="xl" className="w-full group" loading={isStarting}>
+        <Button onClick={handleStart} variant="gradient" size="xl" className="w-full group" loading={isStarting} disabled={!hasGrade}>
           {isStarting ? 'Preparing your assessment…' : (
-            <>Begin Assessment <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" /></>
+            <>Begin {hasGrade ? `${classLabel} ` : ''}Assessment <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" /></>
           )}
         </Button>
       </motion.div>

@@ -1,5 +1,12 @@
 import apiClient from './client'
 import type { StudentSummary, ClassroomStats, AssessmentResult, ProgressEntry, User } from '@/types'
+import type { Grade } from '@/lib/grades'
+
+export interface TeacherClassesResponse {
+  classes: Grade[]
+  allGrades: Grade[]
+  isAdmin: boolean
+}
 
 export interface TeacherAnalytics {
   domainAverages: { domain: string; avg: number }[]
@@ -54,4 +61,10 @@ export const teacherApi = {
 
   reports: () =>
     apiClient.get<ReportEntry[]>('/teacher/reports').then(r => r.data),
+
+  getClasses: () =>
+    apiClient.get<TeacherClassesResponse>('/teacher/classes').then(r => r.data),
+
+  setClasses: (classes: string[]) =>
+    apiClient.put<{ classes: Grade[] }>('/teacher/classes', { classes }).then(r => r.data),
 }
