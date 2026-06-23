@@ -155,11 +155,11 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-brand-600 to-teal-600 -z-10" />
         <div className="absolute inset-0 bg-gradient-mesh opacity-20 -z-10" />
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-          className="max-w-3xl mx-auto text-center text-white">
+          className="max-w-3xl mx-auto text-center">
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
             Ready to Support Every Learner?
           </h2>
-          <p className="text-white/80 text-lg mb-10">
+          <p className="text-lg mb-10">
             Join hundreds of educators using LearnAI to identify and support students with learning difficulties.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
@@ -169,7 +169,7 @@ export default function LandingPage() {
               </Button>
             </Link>
             <Link to="/contact">
-              <Button size="xl" variant="outline" className="border-white/40 text-white hover:bg-white/10">
+              <Button size="xl" variant="gradient" className="border-white/40 hover:bg-white/10">
                 Contact Us
               </Button>
             </Link>
